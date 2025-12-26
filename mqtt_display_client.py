@@ -33,7 +33,7 @@ import validators
 import gpiozero
 from chrome_tab_api import ChromeTabAPI
 from base_mqtt_client import base_mqtt_client as BMC
-
+from paho.mqtt import client as mqtt_client
 #
 # global constants
 #
@@ -121,7 +121,10 @@ class MqttDisplayClient(BMC.BaseMqttClient): # pylint: disable=too-many-instance
 
         # Global config:
         BMC.BaseMqttClient.__init__(self, config_file)
-
+        # Define lwt status topic
+        status_topic = f"{self.topic_root}/status"
+        # Set the Will: payload "OFFLINE", retain=True so new clients see the status
+        #self.client.will_set(status_topic, payload="OFFLINE", qos=1, retain=True)
         #read default config of FullPageOS
         self.read_default_url()
         #after default url of FullPageOS is known add it to topic config
@@ -240,6 +243,45 @@ class MqttDisplayClient(BMC.BaseMqttClient): # pylint: disable=too-many-instance
         except (KeyError, RuntimeError) as error:
             self.log.error("Error while reading ini file: %s", error)
             sys.exit()
+
+
+    def connect(self):
+        """
+        Overrides the base connect to set the LWT after object creation 
+        but before the network connection is made.
+        """
+        # 1. Create the actual MQTT client object using the newly imported name
+        self.client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2)
+        
+        # 2. Set the Last Will and Testament (LWT)
+        # This MUST happen here, before the network connect call
+        status_topic = f"{self.topic_root}/status"
+        self.log.info("Setting LWT to topic: %s", status_topic)
+        self.client.will_set(status_topic, payload="OFFLINE", qos=1, retain=True)
+
+        # 3. Setup credentials
+        if self.username != "":
+            self.client.username_pw_set(self.username, self.password)
+        
+        # 4. Set callbacks
+        self.client.on_connect = BMC.BaseMqttClient.on_connect
+        self.client.on_disconnect = BMC.BaseMqttClient.on_disconnect
+        self.client.user_data_set(self)
+
+        # 5. Establish the connection
+        while True:
+            try:
+                self.client.connect(self.broker, self.port)
+                # Once connected, immediately announce ONLINE status
+                self.client.publish(status_topic, "ONLINE", retain=True)
+                break
+            except OSError as error:
+                self.log.warning("Connection failed: %s. Retrying...", error)
+                import time # Locally imported to ensure it's available
+                time.sleep(self.reconnect_delay)
+
+        # 6. Start the background loop
+        self.client.loop_start()
 
     def read_default_url(self):
         """
@@ -730,7 +772,8 @@ def display_client():
     main function to start the client
     """
     client = MqttDisplayClient(CONFIG_FILE)
-    client.connect()
+    # connect() now handles the internal setup and the ONLINE publish
+    client.connect()   
     client.ha_discover()
     client.publish_loop()
     return client
