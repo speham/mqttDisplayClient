@@ -30,7 +30,7 @@ deviceName=display
 #delay in seconds to try reconnect to server, if connection is lost:
 reconnectDelay=5
 #cycle time in seconds to publish changes in topics:
-publishDelay=3
+publishDelay=15
 #Every publishcycle*fullPublishCycle will be all topics published even if no data changed:
 fullPublishCycle=20
 #location of the FullPageOS webpage config file
@@ -38,7 +38,7 @@ defaultUrl=/boot/firmware/fullpageos.txt
 
 [logging]
 #configure the log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-level=WARNING
+level=CRITICAL
 #log file path
 path=log
 #log file name
@@ -48,21 +48,34 @@ chromeTopic=false
 
 [feature]
 #enable display control with pyautogui. Allowed values (enabled/disabled)
-pyautogui=$pyautogui
-#feature backlight alows you to control the brigtness off directly connected original raspberry pi displays like "Touch Display 2"
+pyautogui=disabled
+#feature backlight alows you to control the brigtness off directly connected original raspberry pi displays like Touch Display 2
 #Disable this feature if you are not sure if your display support this feature! This avoids errors during startup. 
-backlight=$backlight
+backlight=enabled
 #enable home assitant auto discovery
-haDiscover=$haDiscover
+haDiscover=disabled
+ld2450 = ENABLED
+ld2450_2 = ENABLED
 
 [brightness]
-min=0
-max=31
+#min=0
+#max=31
 #shell commands to set and get display brightness
-set=echo {value} | sudo tee /sys/class/backlight/{displayID}/brightness
-get=cat /sys/class/backlight/{displayID}/brightness
+#set=echo {value} | sudo tee /sys/class/backlight/{displayID}/brightness
+#get=cat /sys/class/backlight/{displayID}/brightness
+min=0
+max=100
+# shell commands to set and get display brightness via DDC/CI
+#set=ddcutil --display 1 setvcp 10 {value}
+#get=ddcutil --display 1 getvcp 10 | awk '{print $NF}'
+#set=/usr/bin/ddcutil --display 1 --bus=1 setvcp 10 {value}
+#set=/usr/bin/ddcutil --display 1 setvcp 10 {value}
+#get=cat /home/openhabian/mqttDisplayClient/get_brightness.sh
+#set=/usr/bin/ddcutil --display 1 setvcp 10 {value}
+#get=/home/openhabian/mqttDisplayClient/get_brightness.sh
 
 [backlight]
+# not supported on HDMI displays
 ON=0
 OFF=1
 set=sudo echo {value} | sudo tee /sys/class/backlight/{displayID}/bl_power
@@ -80,7 +93,8 @@ maxTabs=5
 
 [panels]
 tagesschau=https://www.tagesschau.de/
-openhab=http://openhab.local:8080/overview
+openhab=http://192.168.0.53:8080/page/HuaweiMainPage
+kameras=http://192.168.0.159:5000/
 clock=https://uhr.ptb.de/|wait(1000);click(569,75)
 habPanelRoot=http://openhab.local:8080/habpanel/index.html#/
 
@@ -90,11 +104,39 @@ habPanelRoot=http://openhab.local:8080/habpanel/index.html#/
 shutdown=sudo shutdown now
 reboot=sudo reboot
 #special command to be able to test that shell commands are working. Can be deleted if test cases are not performed:
-test=echo "Test" > test.txt;sleep 5;rm test.txt
-
+test=echo Test > test.txt;sleep 5;rm test.txt
+displayein=sudo -u openhabian /home/openhabian/mqttDisplayClient/set_brightnessMax.sh
+displayaus=sudo -u openhabian /home/openhabian/mqttDisplayClient/set_brightnessMin.sh
 
 [haDiscover]
 #device name used in ha discover. You need to adapt it if you have more than one devives in your network 
 deviceName=kiosk01
 #standard base topic of home assitant discovers. Only need to be changed
 base=homeassistant
+
+
+[bme280]
+enabled = true
+i2c_bus = 1
+address = 0x76
+interval = 60
+temperature_offset = -6.1  
+humidity_offset = 12.5   
+pressure_offset = 44.0     
+
+[bh1750]
+enabled = true
+i2c_bus = 1
+address = 0x23
+interval = 60
+multiplikator = 3.6
+
+[ld2450]
+port = /dev/serial0
+baudrate = 256000
+set=SET
+
+[ld2450_2]
+port = /dev/ttyUSB0
+baudrate = 256000
+set=SET

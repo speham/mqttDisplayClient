@@ -74,6 +74,10 @@ then
 	python -m pip install --upgrade pip
 	python -m pip install --upgrade Pillow
 	pip install pyautogui
+	pip install pyserial
+	pip install psutil
+	pip install smbus2 adafruit-circuitpython-bme280 adafruit-circuitpython-bh1750
+
 fi
 
 if [ $backlight = enabled ]
