@@ -547,6 +547,16 @@ class MqttDisplayClient(BMC.BaseMqttClient): # pylint: disable=too-many-instance
             self.log.error("Error while reading ini file: %s", error)
             sys.exit()
 
+    def _update_display_state(self):
+        """Recalculate global display state based on delayed occupancy"""
+
+        any_occupied = any(
+            sensor["occupied_delayed"] for sensor in self.ld_sensors.values()
+        )
+
+        cmd = "displayein" if any_occupied else "displayaus"
+        self._set_shell_cmd(self.topic_config["shell"], cmd)
+
 
     def _ld2450_read_thread(self, sensor_id):
         """Generic background thread for LD2450 sensors."""
@@ -605,14 +615,6 @@ class MqttDisplayClient(BMC.BaseMqttClient): # pylint: disable=too-many-instance
             s["occupied"] = new_raw_state
             significant_change = True
 
-            # -------- DISPLAY CONTROL (GLOBAL RAW LOGIC) --------
-            any_raw_occupied = any(
-                sensor["occupied"] for sensor in self.ld_sensors.values()
-            )
-
-            cmd = "displayein" if any_raw_occupied else "displayaus"
-            self._set_shell_cmd(self.topic_config["shell"], cmd)
-
             # -------- DELAYED LOGIC (PER SENSOR) --------
             if new_raw_state:
                 # Cancel delayed OFF timer
@@ -624,6 +626,8 @@ class MqttDisplayClient(BMC.BaseMqttClient): # pylint: disable=too-many-instance
                     s["occupied_delayed"] = True
                     significant_change = True
 
+                s["occupied_delayed"] = True
+                self._update_display_state()
             else:
                 # Start delayed OFF timer
                 if s["timer"]:
@@ -661,6 +665,7 @@ class MqttDisplayClient(BMC.BaseMqttClient): # pylint: disable=too-many-instance
 
         suffix = "" if sensor_id == 1 else "_2"
         self._publish_ld2450(f"{self.topic_root}/ld2450{suffix}", sensor_id)
+        self._update_display_state()
 
     def _publish_ld2450(self, topic, sensor_id):
         s = self.ld_sensors[sensor_id]
